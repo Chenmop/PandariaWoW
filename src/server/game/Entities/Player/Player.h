@@ -122,6 +122,22 @@ struct PlayerTalent
     uint8 spec : 8;
 };
 
+uint32 const pandarenLanguageSpellsAlliance[] =
+{
+	668,    // Common
+	143368, // Pandaren, Common
+	108130  // Pandaren Alliance
+};
+
+uint32 const pandarenLanguageSpellsHorde[] =
+{
+	669,    // Orcish
+	143369, // Pandaren, Orcish.
+	108131  // Pandaren Horde
+};
+
+#define PANDAREN_FACTION_LANGUAGE_COUNT 3
+
 extern uint32 const MasterySpells [MAX_CLASSES];
 
 enum TalentTree // talent tabs
@@ -1386,7 +1402,7 @@ class Player : public Unit, public GridObject<Player>
 
     void Update(uint32 time);
 
-    static bool BuildEnumData(PreparedQueryResult result, ByteBuffer* dataBuffer, ByteBuffer* bitBuffer);
+    static bool BuildEnumData(PreparedQueryResult result, ByteBuffer* dataBuffer, ByteBuffer* bitBuffer, bool boosted = false);
 
     void SetInWater(bool apply);
 
@@ -1478,7 +1494,7 @@ class Player : public Unit, public GridObject<Player>
     void GiveLevel(uint8 level);
 
     void InitStatsForLevel(bool reapplyMods = false);
-    //void RemoveSpecializationSpells();
+    void RemoveSpecializationSpells();
 
     // .cheat command related
     bool GetCommandStatus(uint32 command) const
@@ -2159,14 +2175,17 @@ class Player : public Unit, public GridObject<Player>
     uint32 GetNextResetTalentsCost() const;
     uint32 GetNextResetSpecializationCost() const;
     void InitTalentForLevel();
+	void InitSpellForLevel();
     void BuildPlayerTalentsInfoData(WorldPacket* data);
     void BuildPetTalentsInfoData(WorldPacket* data);
-    void SendTalentsInfoData();
+	void SendTalentsInfoData(bool pet = false);
     bool LearnTalent(uint16 talentId);
     void LearnPetTalent(uint64 petGuid, uint32 talentId, uint32 talentRank);
     bool AddTalent(uint32 spellId, uint8 spec, bool learning);
     bool HasTalent(uint32 spell_id, uint8 spec) const;
     uint32 CalculateTalentsPoints() const;
+
+	void ResetSpec();
 
     // Dual Spec
     void UpdateSpecCount(uint8 count);
@@ -2633,6 +2652,8 @@ class Player : public Unit, public GridObject<Player>
         return m_team == ALLIANCE ? TEAM_ALLIANCE : TEAM_HORDE;
     }
     void setFactionForRace(uint8 race);
+	void SendPandarenChooseFactionPacket();
+	void SendFeatureSystemStatus();
 
     void InitDisplayIds();
 

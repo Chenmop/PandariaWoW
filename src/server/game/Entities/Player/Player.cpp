@@ -1946,7 +1946,7 @@ void Player::InnEnter(time_t time, uint32 mapid, float x, float y, float z)
     time_inn_enter = time;
 }
 
-bool Player::BuildEnumData(PreparedQueryResult result, ByteBuffer* dataBuffer, ByteBuffer* bitBuffer)
+bool Player::BuildEnumData(PreparedQueryResult result, ByteBuffer* dataBuffer, ByteBuffer* bitBuffer, bool boosted)
 {
     //             0               1                2                3                 4                  5                       6                        7
     //    "SELECT characters.guid, characters.name, characters.race, characters.class, characters.gender, characters.playerBytes, characters.playerBytes2, characters.level, "
@@ -2030,7 +2030,7 @@ bool Player::BuildEnumData(PreparedQueryResult result, ByteBuffer* dataBuffer, B
     bitBuffer->WriteBit(guildGuid[3]);
     bitBuffer->WriteBit(guid[3]);
     bitBuffer->WriteBit(guid[7]);
-    bitBuffer->WriteBit(0); // Can boost ?
+	bitBuffer->WriteBit(boosted);
     bitBuffer->WriteBit(atLoginFlags & AT_LOGIN_FIRST);
     bitBuffer->WriteBit(guid[6]);
     bitBuffer->WriteBit(guildGuid[6]);
@@ -3338,21 +3338,64 @@ void Player::InitTalentForLevel()
     if (!GetSession()->PlayerLoading())
         SendTalentsInfoData();                         // update at client
 }
-/*
+
+
 void Player::RemoveSpecializationSpells()
 {
-    std::list<uint32> spellToRemove;
+std::list<uint32> spellToRemove;
 
-    for (auto itr : GetSpellMap())
-    {
-        SpellInfo const* spell = sSpellMgr->GetSpellInfo(itr.first);
-        if (spell && !spell->SpecializationIdList.empty())
-            spellToRemove.push_back(itr.first);
-    }
+for (auto itr : GetSpellMap())
+{
+SpellInfo const* spell = sSpellMgr->GetSpellInfo(itr.first);
+if (spell && !spell->SpecializationIdList.empty())
+spellToRemove.push_back(itr.first);
+}
 
-    for (auto itr : spellToRemove)
-        removeSpell(itr);
-}*/
+for (auto itr : spellToRemove)
+removeSpell(itr);
+}
+
+
+void Player::InitSpellForLevel()
+{
+	auto spellList = sSpellMgr->GetSpellClassList(getClass());
+	uint8 level = getLevel();
+	uint32 specializationId = GetSpecializationId(GetActiveSpec());
+
+	for (auto spellId : spellList)
+	{
+		SpellInfo const* spell = sSpellMgr->GetSpellInfo(spellId);
+		if (!spell)
+			continue;
+
+		if (HasSpell(spellId))
+			continue;
+
+		if (!spell->SpecializationIdList.empty())
+		{
+			bool find = false;
+
+			for (auto itr : spell->SpecializationIdList)
+				if (itr == specializationId)
+					find = true;
+
+			if (!find)
+				continue;
+		}
+
+		if (!IsSpellFitByClassAndRace(spellId))
+			continue;
+
+		if (spell->SpellLevel <= level)
+			learnSpell(spellId, false);
+	}
+
+
+	// Fix Pick Lock update at each level
+	if (HasSpell(1804) && getLevel() > 20)
+		SetSkill(921, GetSkillStep(921), (getLevel() * 5), (getLevel() * 5));
+}
+
 
 void Player::InitStatsForLevel(bool reapplyMods)
 {
@@ -4717,6 +4760,101 @@ bool Player::RemoveTalent(uint32 talentId)
 
     SendTalentsInfoData();
     return true;
+}
+
+
+void Player::ResetSpec()
+{
+	uint32 cost = 0;
+
+	if (!sWorld->getBoolConfig(CONFIG_NO_RESET_TALENT_COST))
+	{
+		cost = GetNextResetSpecializationCost();
+
+		if (!HasEnoughMoney(uint64(cost)))
+		{
+			SendBuyError(BUY_ERR_NOT_ENOUGHT_MONEY, 0, 0, 0);
+			return;
+		}
+	}
+
+	if (GetSpecializationId(GetActiveSpec()) == 0)
+		return;
+
+	RemoveSpecializationSpells();
+	SetSpecializationId(GetActiveSpec(), 0);
+	InitSpellForLevel();
+	UpdateMastery();
+	SendTalentsInfoData(false);
+
+	ModifyMoney(-(int64)cost);
+	UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_GOLD_SPENT_FOR_TALENTS, cost);
+	UpdateAchievementCriteria(ACHIEVEMENT_CRITERIA_TYPE_NUMBER_OF_TALENT_RESETS, 1);
+
+	SetSpecializationResetCost(cost);
+	SetSpecializationResetTime(time(NULL));
+}
+
+void Player::SetSpecializationId(uint8 spec, uint32 id)
+{
+	_talentMgr->SpecInfo[spec].SpecializationId = id;
+
+	if (spec == GetActiveSpec())
+		SetUInt32Value(PLAYER_FIELD_CURRENT_SPEC_ID, id);
+}
+
+uint32 Player::GetRoleForGroup(uint32 specializationId)
+{
+	uint32 roleId = 0;
+
+	switch (specializationId)
+	{
+	case CHAR_SPECIALIZATION_MAGE_FROST:
+	case CHAR_SPECIALIZATION_MAGE_FIRE:
+	case CHAR_SPECIALIZATION_MAGE_ARCANE:
+	case CHAR_SPECIALIZATION_ROGUE_COMBAT:
+	case CHAR_SPECIALIZATION_ROGUE_ASSASSINATION:
+	case CHAR_SPECIALIZATION_ROGUE_SUBTLETY:
+	case CHAR_SPECIALIZATION_HUNTER_BEAST_MASTERY:
+	case CHAR_SPECIALIZATION_HUNTER_MARKSMANSHIP:
+	case CHAR_SPECIALIZATION_HUNTER_SURVIVAL:
+	case CHAR_SPECIALIZATION_WARLOCK_AFFLICTION:
+	case CHAR_SPECIALIZATION_WARLOCK_DEMONOLOGY:
+	case CHAR_SPECIALIZATION_WARLOCK_DESTRUCTION:
+	case CHAR_SPECIALIZATION_PRIEST_SHADOW:
+	case CHAR_SPECIALIZATION_DEATH_KNIGHT_FROST:
+	case CHAR_SPECIALIZATION_DEATH_KNIGHT_UNHOLY:
+	case CHAR_SPECIALIZATION_MONK_WINDWALKER:
+	case CHAR_SPECIALIZATION_PALADIN_RETRIBUTION:
+	case CHAR_SPECIALIZATION_SHAMAN_ELEMENTAL:
+	case CHAR_SPECIALIZATION_SHAMAN_ENHANCEMENT:
+	case CHAR_SPECIALIZATION_WARRIOR_ARMS:
+	case CHAR_SPECIALIZATION_WARRIOR_FURY:
+	case CHAR_SPECIALIZATION_DRUID_BALANCE:
+	case CHAR_SPECIALIZATION_DRUID_FERAL:
+		roleId = ROLES_DPS;
+		break;
+	case CHAR_SPECIALIZATION_MONK_MISTWEAVER:
+	case CHAR_SPECIALIZATION_PALADIN_HOLY:
+	case CHAR_SPECIALIZATION_PRIEST_DISCIPLINE:
+	case CHAR_SPECIALIZATION_PRIEST_HOLY:
+	case CHAR_SPECIALIZATION_SHAMAN_RESTORATION:
+	case CHAR_SPECIALIZATION_DRUID_RESTORATION:
+		roleId = ROLES_HEALER;
+		break;
+	case CHAR_SPECIALIZATION_MONK_BREWMASTER:
+	case CHAR_SPECIALIZATION_DEATH_KNIGHT_BLOOD:
+	case CHAR_SPECIALIZATION_WARRIOR_PROTECTION:
+	case CHAR_SPECIALIZATION_DRUID_GUARDIAN:
+	case CHAR_SPECIALIZATION_PALADIN_PROTECTION:
+		roleId = ROLES_TANK;
+		break;
+	default: // CHAR_SPECIALIZATION_NONE
+		roleId = ROLES_DEFAULT;
+		break;
+	}
+
+	return roleId;
 }
 
 Mail* Player::GetMail(uint32 id)
@@ -7111,6 +7249,57 @@ void Player::setFactionForRace(uint8 race)
 
     ChrRacesEntry const* rEntry = sChrRacesStore.LookupEntry(race);
     setFaction(rEntry ? rEntry->FactionID : 0);
+}
+
+void Player::SendPandarenChooseFactionPacket()
+{
+	if (getRace() != RACE_PANDAREN_NEUTRAL)
+		return;
+
+	WorldPacket data(SMSG_PANDAREN_CHOOSE_FACTION, 0);
+	GetSession()->SendPacket(&data);
+}
+
+void Player::SendFeatureSystemStatus()
+{
+	bool feedbackSystem = true;
+	bool excessiveWarning = false;
+
+	WorldPacket data(SMSG_FEATURE_SYSTEM_STATUS, 4 + 4 + 4 + 1 + 4 + 2 + 4 + 4 + 4 + 4 + 4 + 4 + 4);
+	data << uint32(0);                  // Scroll of Resurrection per day?
+	data << uint32(0);                  // Scroll of Resurrection current
+	data << uint32(0);
+	data << uint8(2);
+	data << uint32(0);
+
+	data.WriteBit(1);
+	data.WriteBit(1);                   // ingame shop status (0 - "The Shop is temporarily unavailable.")
+	data.WriteBit(1);
+	data.WriteBit(0);                   // Recruit a Friend button
+	data.WriteBit(1);                   // server supports voice chat
+	data.WriteBit(1);                   // show ingame shop icon
+	data.WriteBit(0);                   // Scroll of Resurrection button
+	data.WriteBit(excessiveWarning);    // excessive play time warning
+	data.WriteBit(0);                   // ingame shop parental control (1 - "Feature has been disabled by Parental Controls.")
+	data.WriteBit(feedbackSystem);      // feedback system (bug, suggestion and report systems)
+	data.FlushBits();
+
+	if (excessiveWarning)
+	{
+		data << uint32(0);              // excessive play time warning after period(in seconds)
+		data << uint32(0);
+		data << uint32(0);
+	}
+
+	if (feedbackSystem)
+	{
+		data << uint32(0);
+		data << uint32(1);
+		data << uint32(10);
+		data << uint32(60000);
+	}
+
+	GetSession()->SendPacket(&data);
 }
 
 ReputationRank Player::GetReputationRank(uint32 faction) const
@@ -27012,11 +27201,20 @@ void Player::BuildPetTalentsInfoData(WorldPacket* data)
     }*/
 }
 
-void Player::SendTalentsInfoData()
+void Player::SendTalentsInfoData(bool pet /*= false*/)
 {
-    WorldPacket data(SMSG_TALENTS_INFO, 50);
-    BuildPlayerTalentsInfoData(&data);
-    GetSession()->SendPacket(&data);
+	if (pet)
+	{
+		Pet* pPet = GetPet();
+		WorldPacket data(SMSG_SET_PET_SPECIALIZATION);
+		data << uint16(pPet ? pPet->GetSpecializationId() : 0);
+		GetSession()->SendPacket(&data);
+		return;
+	}
+
+	WorldPacket data(SMSG_TALENTS_INFO, 50);
+	BuildPlayerTalentsInfoData(&data);
+	GetSession()->SendPacket(&data);
 }
 
 void Player::BuildEnchantmentsInfoData(WorldPacket* data)
@@ -27685,10 +27883,13 @@ void Player::SetReputation(uint32 factionentry, uint32 value)
 {
     GetReputationMgr().SetReputation(sFactionStore.LookupEntry(factionentry), value);
 }
+
 uint32 Player::GetReputation(uint32 factionentry) const
 {
     return GetReputationMgr().GetReputation(sFactionStore.LookupEntry(factionentry));
 }
+
+
 
 std::string Player::GetGuildName()
 {

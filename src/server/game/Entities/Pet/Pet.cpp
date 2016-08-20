@@ -2075,3 +2075,34 @@ void Pet::SetDisplayId(uint32 modelId)
             if (player->GetGroup())
                 player->SetGroupUpdateFlag(GROUP_UPDATE_FLAG_PET_MODEL_ID);
 }
+
+
+void Pet::LearnSpecializationSpell()
+{
+	for (uint32 i = 0; i < sSpecializationSpellsStore.GetNumRows(); i++)
+	{
+		SpecializationSpellsEntry const* specializationEntry = sSpecializationSpellsStore.LookupEntry(i);
+		if (!specializationEntry)
+			continue;
+
+		if (specializationEntry->SpecializationId != GetSpecializationId())
+			continue;
+
+		learnSpell(specializationEntry->SpellId);
+	}
+}
+
+void Pet::UnlearnSpecializationSpell()
+{
+	for (uint32 i = 0; i < sSpecializationSpellsStore.GetNumRows(); i++)
+	{
+		SpecializationSpellsEntry const* specializationEntry = sSpecializationSpellsStore.LookupEntry(i);
+		if (!specializationEntry)
+			continue;
+
+		if (specializationEntry->SpecializationId != GetSpecializationId())
+			continue;
+
+		unlearnSpell(specializationEntry->SpellId, false);
+	}
+}

@@ -273,30 +273,35 @@ Item::Item()
     }
 }
 
-bool Item::Create(uint32 guidlow, uint32 itemid, Player const* owner)
+inline bool Item::Create(uint32 guidlow, uint32 itemid, Player const* owner)
 {
-    Object::_Create(guidlow, 0, HIGHGUID_ITEM);
+	return Create(guidlow, itemid, owner ? owner->GetGUID() : 0);
+}
 
-    SetEntry(itemid);
-    SetObjectScale(1.0f);
+bool Item::Create(uint32 guidlow, uint32 itemid, uint64 owner)
+{
+	Object::_Create(guidlow, 0, HIGHGUID_ITEM);
 
-    SetUInt64Value(ITEM_FIELD_OWNER, owner ? owner->GetGUID() : 0);
-    SetUInt64Value(ITEM_FIELD_CONTAINED_IN, owner ? owner->GetGUID() : 0);
+	SetEntry(itemid);
+	SetObjectScale(1.0f);
 
-    ItemTemplate const* itemProto = sObjectMgr->GetItemTemplate(itemid);
-    if (!itemProto)
-        return false;
+	SetUInt64Value(ITEM_FIELD_OWNER, owner);
+	SetUInt64Value(ITEM_FIELD_CONTAINED_IN, owner);
 
-    SetUInt32Value(ITEM_FIELD_STACK_COUNT, 1);
-    SetUInt32Value(ITEM_FIELD_MAX_DURABILITY, itemProto->MaxDurability);
-    SetUInt32Value(ITEM_FIELD_DURABILITY, itemProto->MaxDurability);
+	ItemTemplate const* itemProto = sObjectMgr->GetItemTemplate(itemid);
+	if (!itemProto)
+		return false;
 
-    for (uint8 i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
-        SetSpellCharges(i, itemProto->Spells[i].SpellCharges);
+	SetUInt32Value(ITEM_FIELD_STACK_COUNT, 1);
+	SetUInt32Value(ITEM_FIELD_MAX_DURABILITY, itemProto->MaxDurability);
+	SetUInt32Value(ITEM_FIELD_DURABILITY, itemProto->MaxDurability);
 
-    SetUInt32Value(ITEM_FIELD_EXPIRATION, itemProto->Duration);
-    SetUInt32Value(ITEM_FIELD_CREATE_PLAYED_TIME, 0);
-    return true;
+	for (uint8 i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
+		SetSpellCharges(i, itemProto->Spells[i].SpellCharges);
+
+	SetUInt32Value(ITEM_FIELD_EXPIRATION, itemProto->Duration);
+	SetUInt32Value(ITEM_FIELD_CREATE_PLAYED_TIME, 0);
+	return true;
 }
 
 // Returns true if Item is a bag AND it is not empty.
@@ -1068,45 +1073,50 @@ void Item::SendTimeUpdate(Player* owner)
 
 Item* Item::CreateItem(uint32 itemEntry, uint32 count, Player const* player)
 {
-    if (count < 1)
-        return NULL;                                        //don't create item at zero count
+	return CreateItem(itemEntry, count, player ? player->GetGUID() : 0);
+}
 
-    ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemEntry);
-    if (proto)
-    {
-        if (count > proto->GetMaxStackSize())
-            count = proto->GetMaxStackSize();
+Item* Item::CreateItem(uint32 itemEntry, uint32 count, uint64 playerGuid)
+{
+	if (count < 1)
+		return NULL;                                        //don't create item at zero count
 
-        ASSERT(count != 0 && "pProto->Stackable == 0 but checked at loading already");
+	ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemEntry);
+	if (proto)
+	{
+		if (count > proto->GetMaxStackSize())
+			count = proto->GetMaxStackSize();
 
-        Item* item = NewItemOrBag(proto);
-        if (item->Create(sObjectMgr->GenerateLowGuid(HIGHGUID_ITEM), itemEntry, player))
-        {
-            item->SetCount(count);
-            return item;
-        }
-        else
-            delete item;
-    }
-    else
-        ASSERT(false);
-    return NULL;
+		ASSERT(count != 0 && "pProto->Stackable == 0 but checked at loading already");
+
+		Item* item = NewItemOrBag(proto);
+		if (item->Create(sObjectMgr->GenerateLowGuid(HIGHGUID_ITEM), itemEntry, playerGuid))
+		{
+			item->SetCount(count);
+			return item;
+		}
+		else
+			delete item;
+	}
+	else
+		ASSERT(false);
+	return NULL;
 }
 
 Item* Item::CloneItem(uint32 count, Player const* player) const
 {
-    Item* newItem = CreateItem(GetEntry(), count, player);
-    if (!newItem)
-        return NULL;
+	Item* newItem = CreateItem(GetEntry(), count, player);
+	if (!newItem)
+		return NULL;
 
-    newItem->SetUInt32Value(ITEM_FIELD_CREATOR,      GetUInt32Value(ITEM_FIELD_CREATOR));
-    newItem->SetUInt32Value(ITEM_FIELD_GIFT_CREATOR,  GetUInt32Value(ITEM_FIELD_GIFT_CREATOR));
-    newItem->SetUInt32Value(ITEM_FIELD_DYNAMIC_FLAGS,        GetUInt32Value(ITEM_FIELD_DYNAMIC_FLAGS) & ~(ITEM_FLAG_REFUNDABLE | ITEM_FLAG_BOP_TRADEABLE));
-    newItem->SetUInt32Value(ITEM_FIELD_EXPIRATION,     GetUInt32Value(ITEM_FIELD_EXPIRATION));
-    // player CAN be NULL in which case we must not update random properties because that accesses player's item update queue
-    if (player)
-        newItem->SetItemRandomProperties(GetItemRandomPropertyId());
-    return newItem;
+	newItem->SetUInt32Value(ITEM_FIELD_CREATOR, GetUInt32Value(ITEM_FIELD_CREATOR));
+	newItem->SetUInt32Value(ITEM_FIELD_GIFT_CREATOR, GetUInt32Value(ITEM_FIELD_GIFT_CREATOR));
+	newItem->SetUInt32Value(ITEM_FIELD_DYNAMIC_FLAGS, GetUInt32Value(ITEM_FIELD_DYNAMIC_FLAGS) & ~(ITEM_FLAG_REFUNDABLE | ITEM_FLAG_BOP_TRADEABLE));
+	newItem->SetUInt32Value(ITEM_FIELD_EXPIRATION, GetUInt32Value(ITEM_FIELD_EXPIRATION));
+	// player CAN be NULL in which case we must not update random properties because that accesses player's item update queue
+	if (player)
+		newItem->SetItemRandomProperties(GetItemRandomPropertyId());
+	return newItem;
 }
 
 bool Item::IsBindedNotWith(Player const* player) const

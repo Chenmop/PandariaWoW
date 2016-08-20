@@ -7188,6 +7188,23 @@ bool Unit::HandleProcTriggerSpell(Unit* victim, uint32 damage, AuraEffect* trigg
                 }
                 break;
             }
+
+			case 49509: // Scent of Blood
+			{
+				if (GetTypeId() != TYPEID_PLAYER)
+					return false;
+
+				if (getClass() != CLASS_DEATH_KNIGHT)
+					return false;
+
+				if (ToPlayer()->GetSpecializationId(ToPlayer()->GetActiveSpec()) != CHAR_SPECIALIZATION_DEATH_KNIGHT_BLOOD)
+					return false;
+
+				if (!roll_chance_i(15))
+					return false;
+
+				break;
+			}
             case SPELLFAMILY_ROGUE:
             {
                 switch (auraSpellInfo->Id)

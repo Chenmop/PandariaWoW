@@ -215,12 +215,14 @@ bool ItemCanGoIntoBag(ItemTemplate const* proto, ItemTemplate const* pBagProto);
 class Item : public Object
 {
     public:
-        static Item* CreateItem(uint32 itemEntry, uint32 count, Player const* player = NULL);
-        Item* CloneItem(uint32 count, Player const* player = NULL) const;
+		static Item* CreateItem(uint32 itemEntry, uint32 count, Player const* player = NULL);
+		static Item* CreateItem(uint32 itemEntry, uint32 count, uint64 playerGuid);
+		Item* CloneItem(uint32 count, Player const* player = NULL) const;
 
-        Item();
+		Item();
 
-        virtual bool Create(uint32 guidlow, uint32 itemid, Player const* owner);
+		virtual bool Create(uint32 guidlow, uint32 itemid, Player const* owner);
+		virtual bool Create(uint32 guidlow, uint32 itemid, uint64 playerGuid);
 
         ItemTemplate const* GetTemplate() const;
 

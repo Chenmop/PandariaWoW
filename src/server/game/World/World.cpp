@@ -120,7 +120,7 @@ World::World()
     m_availableDbcLocaleMask = 0;
 
     m_updateTimeSum = 0;
-    m_updateTimeCount = 0;
+    m_updateTimeCount = 0; 
 
     m_isClosed = false;
 
@@ -284,6 +284,8 @@ void World::AddSession_(WorldSession* s)
     s->SendAuthResponse(AUTH_OK, false);
     s->SendAddonsInfo();
     s->SendClientCacheVersion(sWorld->getIntConfig(CONFIG_CLIENTCACHE_VERSION));
+	if (s->HasBoost())
+		s->SendBattlePayDistributionUpdate(0, CHARACTER_BOOST, CHARACTER_BOOST_ALLOW, CHARACTER_BOOST_TEXT_ID, CHARACTER_BOOST_BONUS_TEXT, CHARACTER_BOOST_BONUS_TEXT2);
     s->SendTutorialsData();
     s->SendTimezoneInformation();
 
